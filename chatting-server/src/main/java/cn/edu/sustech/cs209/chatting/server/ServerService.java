@@ -1,5 +1,8 @@
 package cn.edu.sustech.cs209.chatting.server;
 
+import cn.edu.sustech.cs209.chatting.common.Message;
+import cn.edu.sustech.cs209.chatting.common.OnChatItem;
+
 import java.io.*;
 import java.net.Socket;
 import java.util.*;
@@ -25,12 +28,16 @@ public class ServerService implements Runnable {
                 if (command.equals("Exit"))
                     return;
 
-                executeCommand(command);
+                try {
+                    executeCommand(command);
+                } catch (IOException | ClassNotFoundException | InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
             }
         }
     }
 
-    public void executeCommand(String command) {
+    public void executeCommand(String command) throws IOException, ClassNotFoundException, InterruptedException {
         switch (command) {
             case "UserList":
                 List<String>userlist = new ArrayList<>();
@@ -44,7 +51,80 @@ public class ServerService implements Runnable {
                 out.println(Server.serialize(rl));
                 out.flush();
                 break;
-            case "SendMessage":
+
+            case "NewChat":{
+                OnChatItem newChat;
+                while (true){
+                    if(in.hasNext()){
+                        newChat = (OnChatItem) Server.deserialize(in.next());
+                        break;
+                    }
+                }
+                int newId = Server.count;
+                Server.count++;
+                newChat.setId(newId);
+                Server.groups.put(newId, newChat);
+
+                out.println(newId);
+                out.flush();
+                break;
+            }
+            case "GetChat":{
+                int chatId;
+                while (true){
+                    if(in.hasNext()){
+                        chatId = Integer.parseInt(in.next());
+                        break;
+                    }
+                }
+                OnChatItem item = Server.groups.get(chatId);
+                String data = Server.serialize(item);
+                out.println(data);
+                out.flush();
+                break;
+            }
+            case "SendMessage":{
+                System.out.println("execute SendMessage");
+                int chatId;
+                Message newMsg;
+                while (true){
+                    if(in.hasNext()){
+                        chatId = Integer.parseInt(in.next());
+                        break;
+                    }
+                }
+                while (true){
+                    if(in.hasNext()){
+                        newMsg = (Message) Server.deserialize(in.next());
+                        break;
+                    }
+                }
+                //找到对应chatgroup
+                OnChatItem item = Server.groups.get(chatId);
+                item.chatMessage.add(newMsg);
+                for(String user: item.chatPeople){
+                    if (!user.equals(newMsg.getSentBy())){
+                        Socket s = Server.users.get(user);
+                        PrintWriter s_out = new PrintWriter(s.getOutputStream());
+                        String Name;
+                        if(item.groupName != null){
+                            Name = item.groupName;
+                        }else {
+                            Name = newMsg.getSentBy();
+                        }
+                        s_out.println("NewMessage#" + Name + "#" + chatId );
+                        s_out.flush();
+                    }
+                }
+
+                break;
+            }
+
+            default:
+                break;
+
+
+
 
         }
 

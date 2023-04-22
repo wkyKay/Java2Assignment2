@@ -1,5 +1,7 @@
 package cn.edu.sustech.cs209.chatting.server;
 
+import cn.edu.sustech.cs209.chatting.common.OnChatItem;
+
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -9,6 +11,8 @@ public class Server {
 
     static List<String> usernames = new ArrayList<>();
     static Map<String, Socket> users = new HashMap<>();
+    static Map<Integer, OnChatItem> groups = new HashMap<>();
+    static int count = 0;
 
 
     public static void main(String[] args) throws IOException {
@@ -73,6 +77,7 @@ public class Server {
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
+            out.println("UpdateList");
             out.println(serialize(rl));
         }
     }

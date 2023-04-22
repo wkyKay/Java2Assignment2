@@ -1,47 +1,39 @@
 package cn.edu.sustech.cs209.chatting.client;
 
 import cn.edu.sustech.cs209.chatting.common.Message;
+import cn.edu.sustech.cs209.chatting.common.OnChatItem;
 import javafx.application.Platform;
+import javafx.beans.value.ObservableValue;
 import javafx.fxml.FXML;
-import javafx.fxml.Initializable;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.HBox;
 import javafx.stage.Stage;
 import javafx.util.Callback;
 
 import java.io.*;
-import java.net.Socket;
-import java.net.URL;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
 
-
-public class Controller implements Initializable {
-
+public class Controller {
+    public Label currentUsername;
+    public Label currentOnlineCnt;
+    Client client;
     @FXML
     ListView<Message> chatContentList;
     @FXML
     ListView<String> chatList;
     @FXML
     TextArea inputArea;
-    Socket client;
-    Scanner in;
-    PrintWriter out;
     String username;
-    List<String> onPrivateChat = new ArrayList<>();
-    List<List<String>> onGroupChat = new ArrayList<>();
+    Map<String, Integer> nameToId = new HashMap<>();
 
-    Map<String,List<Message>> onPrivateChatMsg = new HashMap<>();
-    Map<List<String>,List<Message>> onGroupChatMsg = new HashMap<>();
-    Map<String, List<String>> groupNameUsers = new HashMap<>();
 
-    @Override
-    public void initialize(URL url, ResourceBundle resourceBundle) {
-
-        InitializeConnection();
+    public void initialize(Client client) throws IOException {
+        this.client = client;
         Dialog<String> dialog = new TextInputDialog();
         dialog.setTitle("Login");
         dialog.setHeaderText(null);
@@ -54,66 +46,48 @@ public class Controller implements Initializable {
                      if so, ask the user to change the username
              */
             username = input.get();
-            out.println(username);
-            out.flush();
-            String result = null;
-            while (true){
-                if(in.hasNext()){
-                    result = in.next();
-                    if(result.equals("Occupied")){
-                        System.out.println("Occupied username: " + username +", please try another");
-                        Platform.exit();
-                    }else {
-                        System.out.println(username + " Connected to the Server.");
-                    }
-                    break;
-                }
+            client.sendMessage(username);
+            String result = getData();
+            if (result.equals("Occupied")) {
+                System.out.println("Occupied username: " + username + ", please try another");
+                Platform.exit();
+            } else {
+                currentUsername.setText(username);
+                System.out.println(username + " Connected to the Server.");
             }
 
         } else {
             System.out.println("Invalid username " + input + ", exiting");
             Platform.exit();
         }
+        chatList.getSelectionModel().selectedItemProperty().addListener((ObservableValue<? extends String> observable, String oldValue, String newValue) -> {
 
-        out.println(username);
-        out.flush();
+            if (newValue != null) {
+                Platform.runLater(() -> {
+                    try {
+                        openChatItem(newValue);
+                    } catch (IOException | ClassNotFoundException | InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
+                });
+            }
+        });
         chatContentList.setCellFactory(new MessageCellFactory());
     }
-    public void InitializeConnection()  {
-        Socket s = null;
-        try {
-            s = new Socket("localhost",8888);
-            in = new Scanner(s.getInputStream());
-            out = new PrintWriter(s.getOutputStream());
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
 
-    public Scanner getIn(){
-        return in;
-    }
-    public PrintWriter getOut(){
-        return out;
-    }
 
     @FXML
-    public void createPrivateChat() throws IOException, ClassNotFoundException {
+    public void createPrivateChat() throws IOException, ClassNotFoundException, InterruptedException {
         AtomicReference<String> user = new AtomicReference<>();
 
         Stage stage = new Stage();
         ComboBox<String> userSel = new ComboBox<>();
 
         // FIXME: get the user list from server, the current user's name should be filtered out
-        out.println("UserList");
-        out.flush();
+        client.sendMessage("UserList");
         String[] userlist;
-        while (true){
-            if(in.hasNext()){
-                userlist = (String[]) deserialize(in.next());
-                break;
-            }
-        }
+
+        userlist = (String[]) deserialize(getData());
         userSel.getItems().addAll(userlist);
 
         Button okBtn = new Button("OK");
@@ -132,14 +106,29 @@ public class Controller implements Initializable {
         // TODO: if the current user already chatted with the selected user, just open the chat with that user
         // TODO: otherwise, create a new chat item in the left panel, the title should be the selected user's name
         String selected = String.valueOf(user);
-        if(onPrivateChat.contains(selected)){
+
+        if (nameToId.get(selected) != null) {
+            //清空聊天面板
             chatContentList.getItems().clear();
-            chatContentList.getItems().addAll(onPrivateChatMsg.get(selected));
-        }else {
-            onPrivateChat.add(selected);
-            chatContentList.getItems().clear();
-            onPrivateChatMsg.put(selected, new ArrayList<>());
+            //获取聊天记录
+            client.sendMessage("GetChat");
+            client.sendMessage(nameToId.get(selected).toString());
+            OnChatItem current = (OnChatItem) deserialize(getData());
+            chatContentList.getItems().addAll(current.chatMessage);
+        } else {
+            //创建聊天
+            client.sendMessage("NewChat");
+            client.sendMessage(serialize(new OnChatItem(selected, this.username)));
+            //获取id并保存
+            System.out.println("waiting id");
+            Thread.sleep(100);
+            int givenId = Integer.parseInt(getData());
+            System.out.println(givenId);
+
+            nameToId.put(selected, givenId);
+            //清空聊天面板
             chatList.getItems().addAll(selected);
+            chatContentList.getItems().clear();
         }
     }
 
@@ -154,18 +143,18 @@ public class Controller implements Initializable {
      * UserA, UserB (2)
      */
     @FXML
-    public void createGroupChat() throws IOException, ClassNotFoundException {
+    public void createGroupChat() throws IOException, ClassNotFoundException, InterruptedException {
         List<String> users = new ArrayList<>();
         Stage stage = new Stage();
         ComboBox<String> userSel = new ComboBox<>();
 
         // FIXME: get the user list from server, the current user's name should be filtered out
-        out.println("UserList");
-        out.flush();
+        client.sendMessage("UserList");
         String[] userlist;
-        while (true){
-            if(in.hasNext()){
-                userlist = (String[]) deserialize(in.next());
+        while (true) {
+            if (client.data != null) {
+                userlist = (String[]) deserialize(client.data);
+                client.data = null;
                 break;
             }
         }
@@ -174,7 +163,6 @@ public class Controller implements Initializable {
         Button finishBtn = new Button("finish");
         okBtn.setOnAction(e -> {
             users.add(userSel.getSelectionModel().getSelectedItem());
-
         });
         finishBtn.setOnAction(e -> {
             stage.close();
@@ -187,20 +175,35 @@ public class Controller implements Initializable {
         stage.setScene(new Scene(box));
         stage.showAndWait();
 
-        if(onGroupChat.contains(users)){
+        StringBuilder groupName = new StringBuilder();
+        for (int i = 0; i < 3 && i < users.size(); i++) {
+            groupName.append(users.get(i)).append(",");
+        }
+        groupName.append("...(").append(users.size() + 1).append(")");
+        String selected = groupName.toString();
+
+        if (nameToId.get(selected) != null) {
+            //清空聊天面板
             chatContentList.getItems().clear();
-            chatContentList.getItems().addAll(onGroupChatMsg.get(users));
-        }else {
-            onGroupChat.add(users);
+            //获取聊天记录
+            client.sendMessage("GetChat");
+            client.sendMessage(nameToId.get(selected).toString());
+            OnChatItem current = (OnChatItem) deserialize(getData());
+            chatContentList.getItems().addAll(current.chatMessage);
+        } else {
+            //创建聊天
+            client.sendMessage("NewChat");
+            client.sendMessage(serialize(new OnChatItem(users, this.username, selected)));
+            //获取id并保存
+            System.out.println("waiting id");
+            Thread.sleep(100);
+            int givenId = Integer.parseInt(getData());
+            System.out.println(givenId);
+
+            nameToId.put(selected, givenId);
+            //清空聊天面板
+            chatList.getItems().addAll(selected);
             chatContentList.getItems().clear();
-            onGroupChatMsg.put(users, new ArrayList<>());
-            StringBuilder groupName = new StringBuilder();
-            for(int i = 0; i < 3 && i < users.size(); i++){
-                groupName.append(users.get(i)).append(",");
-            }
-            groupName.append("...(").append(users.size()+1).append(")");
-            chatList.getItems().addAll(String.valueOf(groupName));
-            groupNameUsers.put(String.valueOf(groupName), users);
         }
     }
 
@@ -211,23 +214,108 @@ public class Controller implements Initializable {
      * After sending the message, you should clear the text input field.
      */
     @FXML
-    public void doSendMessage() {
+    public void doSendMessage() throws IOException, ClassNotFoundException, InterruptedException {
         // TODO
-        String data = inputArea.toString();
+        String data = inputArea.getText();
+        if (data.equals("")) {
+            return;
+        }
         String selectedItem = chatList.getSelectionModel().getSelectedItem();
-        List<String>sendto = new ArrayList<>();
+        int chatId = nameToId.get(selectedItem);
+        Message newMsg = new Message(0L, username, chatId, data);
+        //清空聊天面板
+        chatContentList.getItems().clear();
+        //获取聊天记录
+        client.sendMessage("GetChat");
+        Thread.sleep(100);
+        client.sendMessage(String.valueOf(chatId));
+        Thread.sleep(100);
+        OnChatItem current = (OnChatItem) deserialize(getData());
+        chatContentList.getItems().addAll(current.chatMessage);
+        //发送消息
+        client.sendMessage("SendMessage");
+        Thread.sleep(100);
+        client.sendMessage(String.valueOf(chatId));
 
-        if(onPrivateChat.contains(selectedItem)){
-            sendto.add(selectedItem);
-        }else if(onGroupChat.contains(groupNameUsers.get(selectedItem))){
-            sendto = groupNameUsers.get(selectedItem);
+        Thread.sleep(100);
+        client.sendMessage(serialize(newMsg));
+        //更新聊天面板：添加我说的话
+        chatContentList.getItems().addAll(newMsg);
+        inputArea.setText("");
+
+    }
+
+
+    public void receiveMessage(String input) throws IOException, ClassNotFoundException, InterruptedException {
+
+        String sendBy = input.split("#")[1];
+        String id = input.split("#")[2];
+//        Stage stage = new Stage();
+//        HBox reminder = new HBox(30);
+//        reminder.setAccessibleText("Message from " + sendBy);
+//        Button okBtn = new Button("OK");
+//        okBtn.setOnAction(e -> {
+//            stage.close();
+//        });
+//
+//        HBox box = new HBox(40);
+//        box.setAlignment(Pos.TOP_CENTER);
+//        box.setPadding(new Insets(20, 20, 20, 20));
+//        box.getChildren().addAll(reminder,okBtn);
+//        stage.setScene(new Scene(box));
+//        stage.showAndWait();
+        //未曾通信
+        if (!nameToId.containsKey(sendBy)) {
+            nameToId.put(sendBy, Integer.valueOf(id));
+            chatList.getItems().addAll(sendBy);
+        }
+    }
+
+
+    public String getData() {
+        String result = null;
+        while (true) {
+            if (client.data != null) {
+                result = client.data;
+                client.data = null;
+                break;
+            }
+        }
+        return result;
+    }
+
+    public void openChatItem(String newValue) throws IOException, ClassNotFoundException, InterruptedException {
+
+        int chatId;
+        if (nameToId.get(newValue) != null) {
+            chatId = nameToId.get(newValue);
+            //清空聊天面板
+            chatContentList.getItems().clear();
+            //获取聊天记录
+            client.sendMessage("GetChat");
+            Thread.sleep(100);
+            client.sendMessage(String.valueOf(chatId));
+            Thread.sleep(100);
+            OnChatItem current = (OnChatItem) deserialize(getData());
+            if (current.chatMessage != null && current.chatMessage.size() != 0)
+                chatContentList.getItems().addAll(current.chatMessage);
         }
 
-        Message message = new Message(0L, username, sendto, data);
-        out.println("SendMessage");
-        out.flush();
-        out.println(serialize(message));
-        out.flush();
+    }
+
+    @FXML
+    public void getMessage() throws InterruptedException, IOException, ClassNotFoundException {
+        String selectedItem = chatList.getSelectionModel().getSelectedItem();
+        int chatId = nameToId.get(selectedItem);
+        //清空聊天面板
+        chatContentList.getItems().clear();
+        //获取聊天记录
+        client.sendMessage("GetChat");
+        Thread.sleep(100);
+        client.sendMessage(String.valueOf(chatId));
+        Thread.sleep(100);
+        OnChatItem current = (OnChatItem) deserialize(getData());
+        chatContentList.getItems().addAll(current.chatMessage);
     }
 
     /**
@@ -273,7 +361,7 @@ public class Controller implements Initializable {
         }
     }
 
-    public String serialize(Serializable o)  {
+    public String serialize(Serializable o) {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         ObjectOutputStream oos = null;
         try {
@@ -297,11 +385,5 @@ public class Controller implements Initializable {
         return o;
     }
 
-    public String GetMessage(String data){
-        return data;
-    }
 
-    public void ExecuteCommand(String command){
-
-    }
 }

@@ -9,11 +9,11 @@ public class Message implements Serializable {
 
     private String sentBy;
 
-    private List<String> sendTo;
+    private int sendTo;
 
     private String data;
 
-    public Message(Long timestamp, String sentBy, List<String> sendTo, String data) {
+    public Message(Long timestamp, String sentBy, int sentTo, String data) {
         this.timestamp = timestamp;
         this.sentBy = sentBy;
         this.sendTo = sendTo;
@@ -28,7 +28,7 @@ public class Message implements Serializable {
         return sentBy;
     }
 
-    public List<String> getSendTo() {
+    public int getSendTo() {
         return sendTo;
     }
 
