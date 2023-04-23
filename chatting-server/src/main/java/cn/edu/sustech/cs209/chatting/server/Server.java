@@ -77,8 +77,7 @@ public class Server {
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
-            out.println("UpdateList");
-            out.println(serialize(rl));
+            out.println("UpdateList#"+usernames.size());
         }
     }
 

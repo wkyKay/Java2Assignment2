@@ -9,18 +9,24 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
-import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.HBox;
+import javafx.scene.paint.Color;
 import javafx.stage.Stage;
 import javafx.util.Callback;
+import javafx.scene.control.ListCell;
 
 import java.io.*;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class Controller {
+    @FXML
     public Label currentUsername;
+    @FXML
     public Label currentOnlineCnt;
+    public Color x4;
+    @FXML
+    public Menu groupMessage;
     Client client;
     @FXML
     ListView<Message> chatContentList;
@@ -87,6 +93,7 @@ public class Controller {
         client.sendMessage("UserList");
         String[] userlist;
 
+        Thread.sleep(100);
         userlist = (String[]) deserialize(getData());
         userSel.getItems().addAll(userlist);
 
@@ -158,6 +165,8 @@ public class Controller {
                 break;
             }
         }
+        if (userlist == null)
+            return;
         userSel.getItems().addAll(userlist);
         Button okBtn = new Button("OK");
         Button finishBtn = new Button("finish");
@@ -250,25 +259,32 @@ public class Controller {
 
         String sendBy = input.split("#")[1];
         String id = input.split("#")[2];
-//        Stage stage = new Stage();
-//        HBox reminder = new HBox(30);
-//        reminder.setAccessibleText("Message from " + sendBy);
-//        Button okBtn = new Button("OK");
-//        okBtn.setOnAction(e -> {
-//            stage.close();
-//        });
-//
-//        HBox box = new HBox(40);
-//        box.setAlignment(Pos.TOP_CENTER);
-//        box.setPadding(new Insets(20, 20, 20, 20));
-//        box.getChildren().addAll(reminder,okBtn);
-//        stage.setScene(new Scene(box));
-//        stage.showAndWait();
         //未曾通信
         if (!nameToId.containsKey(sendBy)) {
             nameToId.put(sendBy, Integer.valueOf(id));
-            chatList.getItems().addAll(sendBy);
+            Platform.runLater(()->chatList.getItems().addAll(sendBy));
+
         }
+        Platform.runLater(()-> setItemColorByName(chatList, sendBy));
+
+    }
+
+    private void setItemColorByName(ListView<String> listView, String itemName) {
+        listView.setCellFactory(list -> new ListCell<String>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                    setStyle(null);
+                } else {
+                    setText(item);
+                    if (item.equals(itemName)) {
+                        setStyle("-fx-background-color: green;");
+                    }
+                }
+            }
+        });
     }
 
 
@@ -286,6 +302,7 @@ public class Controller {
 
     public void openChatItem(String newValue) throws IOException, ClassNotFoundException, InterruptedException {
 
+        groupMessage.setText(newValue);
         int chatId;
         if (nameToId.get(newValue) != null) {
             chatId = nameToId.get(newValue);
@@ -297,6 +314,11 @@ public class Controller {
             client.sendMessage(String.valueOf(chatId));
             Thread.sleep(100);
             OnChatItem current = (OnChatItem) deserialize(getData());
+            groupMessage.getItems().clear();
+            for (String item : current.chatPeople) {
+                MenuItem menuItem = new MenuItem(item);
+                groupMessage.getItems().add(menuItem);
+            }
             if (current.chatMessage != null && current.chatMessage.size() != 0)
                 chatContentList.getItems().addAll(current.chatMessage);
         }
@@ -326,7 +348,6 @@ public class Controller {
         @Override
         public ListCell<Message> call(ListView<Message> param) {
             return new ListCell<Message>() {
-
                 @Override
                 public void updateItem(Message msg, boolean empty) {
                     super.updateItem(msg, empty);
