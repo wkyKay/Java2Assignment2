@@ -230,6 +230,8 @@ public class Controller {
             return;
         }
         String selectedItem = chatList.getSelectionModel().getSelectedItem();
+        if(selectedItem == null)
+            return;
         int chatId = nameToId.get(selectedItem);
         Message newMsg = new Message(0L, username, chatId, data);
         //清空聊天面板
