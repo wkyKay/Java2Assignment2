@@ -25,9 +25,6 @@ public class ServerService implements Runnable {
         while (true) {
             if (in.hasNext()) {
                 String command = in.next();
-                if (command.equals("Exit"))
-                    return;
-
                 try {
                     executeCommand(command);
                 } catch (IOException | ClassNotFoundException | InterruptedException e) {
@@ -103,7 +100,7 @@ public class ServerService implements Runnable {
                 OnChatItem item = Server.groups.get(chatId);
                 item.chatMessage.add(newMsg);
                 for(String user: item.chatPeople){
-                    if (!user.equals(newMsg.getSentBy())){
+                    if (!user.equals(newMsg.getSentBy()) && Server.usernames.contains(user)){
                         Socket s = Server.users.get(user);
                         PrintWriter s_out = new PrintWriter(s.getOutputStream());
                         String Name;
@@ -119,11 +116,18 @@ public class ServerService implements Runnable {
 
                 break;
             }
-
+            case "Exit":{
+                String username;
+                while (true){
+                    if(in.hasNext()){
+                        username = in.next();
+                        break;
+                    }
+                }
+                Server.removeUser(username);
+            }
             default:
                 break;
-
-
 
 
         }

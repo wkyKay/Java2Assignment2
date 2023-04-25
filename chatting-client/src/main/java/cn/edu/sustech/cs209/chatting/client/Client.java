@@ -5,9 +5,13 @@ import javafx.application.Platform;
 import javafx.concurrent.ScheduledService;
 import javafx.concurrent.Service;
 import javafx.concurrent.Task;
+import javafx.event.EventHandler;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Scene;
 import javafx.stage.Stage;
+import javafx.stage.WindowEvent;
+import sun.awt.windows.ThemeReader;
+
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -45,10 +49,11 @@ public class Client extends Application {
                         } catch (IOException | ClassNotFoundException | InterruptedException e) {
                             throw new RuntimeException(e);
                         }
-//                        case "UpdateList": {
-//                            break;
-//                        }
-                    } else {
+                    }else if(input.split("#")[0].equals("UpdateList")){
+                        controller.updateList(input);
+
+                    }
+                    else {
                         setData(input);
                     }
                 }
@@ -58,6 +63,19 @@ public class Client extends Application {
         controller.initialize(this);
         stage.setTitle("Chatting Client");
         stage.show();
+        stage.setOnCloseRequest(event -> {
+            //执行您要在关闭窗口时执行的代码
+            out.println("Exit");
+            out.flush();
+            try {
+                Thread.sleep(10);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+            out.println(controller.username);
+            out.flush();
+            System.out.println(controller.username + " exits.");
+        });
     }
 
     public void sendMessage(String s) {

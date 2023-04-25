@@ -340,6 +340,11 @@ public class Controller {
         chatContentList.getItems().addAll(current.chatMessage);
     }
 
+    public void updateList(String input) {
+        String size = input.split("#")[1];
+        Platform.runLater(()->currentOnlineCnt.setText(size));
+    }
+
     /**
      * You may change the cell factory if you changed the design of {@code Message} model.
      * Hint: you may also define a cell factory for the chats displayed in the left panel, or simply override the toString method.

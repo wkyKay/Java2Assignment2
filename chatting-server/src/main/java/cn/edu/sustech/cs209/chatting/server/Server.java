@@ -8,6 +8,7 @@ import java.net.Socket;
 import java.util.*;
 
 public class Server {
+    static int onlineCnt = 0;
 
     static List<String> usernames = new ArrayList<>();
     static Map<String, Socket> users = new HashMap<>();
@@ -51,34 +52,47 @@ public class Server {
     public synchronized static void addUser(Socket user, String name){
         users.put(name,user);
         usernames.add(name);
+        onlineCnt ++;
         notifyUsers();
     }
 
     public synchronized static void removeUser(String name){
         users.remove(name);
         usernames.remove(name);
+        onlineCnt --;
         notifyUsers();
     }
 
     public static void notifyUsers()  {
-        for(String n: usernames){
-            List<String> returnList = new ArrayList<>();
-            for(String m:usernames){
-                if(m.equals(n)){
-                    continue;
-                }
-                returnList.add(m);
-            }
-            String[]rl = new String[returnList.size()];
-            returnList.toArray(rl);
-            PrintWriter out = null;
+//        for(String n: usernames){
+//            List<String> returnList = new ArrayList<>();
+//            for(String m:usernames){
+//                if(m.equals(n)){
+//                    continue;
+//                }
+//                returnList.add(m);
+//            }
+//            String[]rl = new String[returnList.size()];
+//            returnList.toArray(rl);
+//            PrintWriter out = null;
+//            try {
+//                out = new PrintWriter(users.get(n).getOutputStream());
+//            } catch (IOException e) {
+//                throw new RuntimeException(e);
+//            }
+        for(String n:usernames){
+            Socket s = users.get(n);
+            PrintWriter s_out = null;
             try {
-                out = new PrintWriter(users.get(n).getOutputStream());
+                s_out = new PrintWriter(s.getOutputStream());
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
-            out.println("UpdateList#"+usernames.size());
+            s_out.println("UpdateList#"+onlineCnt);
+            s_out.flush();
         }
+
+//        }
     }
 
     public static String serialize(Serializable o)  {
